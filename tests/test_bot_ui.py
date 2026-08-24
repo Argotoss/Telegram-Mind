@@ -34,3 +34,11 @@ def test_board_lays_played_cards_face_up_and_hidden_cards_as_back_buttons():
     assert [button.text for button in card_row] == ["12", "🂠", "🂠"]
     assert [button.style for button in card_row] == ["success", "primary", "primary"]
     assert "CARDS 2" in board_text(game)
+
+
+def test_lobby_already_shows_the_empty_table_before_starting():
+    game = Game(10, {1: type("P", (), {"name": "Ada", "cards": []})(), 2: type("P", (), {"name": "Bob", "cards": []})()})
+
+    card_row = board_keyboard(game).inline_keyboard[0]
+
+    assert [button.text for button in card_row] == ["🂠", "🂠"]

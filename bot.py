@@ -63,24 +63,30 @@ def new_game_keyboard() -> InlineKeyboardMarkup:
 
 def board_text(game) -> str:
     players = " · ".join(escape(player.name) for player in game.players.values()) or "—"
+    card_count = game.cards_remaining or len(game.players) * game.level
     return (
         "<b>THE MIND</b>\n"
         f"<code>LEVEL {game.level}/{game.max_level} · LIVES {game.lives} · STARS {game.stars}</code>\n\n"
         f"<b>PLAYERS · {len(game.players)}</b>\n{players}\n"
-        f"<code>CARDS {game.cards_remaining}</code>"
+        f"<code>CARDS {card_count}</code>"
     )
 
 
 def board_keyboard(game) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    if game.status == "active":
+    if game.status in {"lobby", "active"}:
+        card_count = (
+            max(1, len(game.players) * game.level)
+            if game.status == "lobby"
+            else len(game.played_numbers) + game.cards_remaining
+        )
         cards = [
             premium_button(str(card), "mind:noop", "success", "MIND_CARD_EMOJI_ID")
             for card in game.played_numbers
         ]
         cards.extend(
             premium_button("🂠", "mind:noop", "primary", "MIND_BACK_EMOJI_ID")
-            for _ in range(game.cards_remaining)
+            for _ in range(card_count - len(cards))
         )
         rows.append(cards[:8])
     if game.players:
