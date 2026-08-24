@@ -22,7 +22,7 @@ A tiny group-only Telegram bot for playing The Mind. Shared game state stays in 
 
 ## How to play
 
-In the group, send `/mind`. Everyone presses **Join**. Use **⚙️ Settings** before starting to configure lives, stars, and the number of levels. Then press **Start Game**.
+In the group, send `/mind`. Everyone presses **JOIN**, then **START**. Use `/mind_settings` before starting to configure lives, stars, and levels.
 
 Sending `/mind` again resets the current game to a fresh empty lobby. Everyone must press **Join game** again.
 

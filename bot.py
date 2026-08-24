@@ -21,10 +21,17 @@ manager = GameManager()
 default_reward = os.getenv("MIND_REWARD", "")
 
 
+def premium_button(text: str, callback_data: str, style: str, emoji_env: str | None = None) -> InlineKeyboardButton:
+    kwargs = {"text": text, "style": style, "callback_data": callback_data}
+    emoji_id = os.getenv(emoji_env, "") if emoji_env else ""
+    if emoji_id:
+        kwargs["icon_custom_emoji_id"] = emoji_id
+    return InlineKeyboardButton(**kwargs)
+
+
 def lobby_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="JOIN", style="success", callback_data="mind:join"), InlineKeyboardButton(text="SETTINGS", style="primary", callback_data="mind:settings")],
-        [InlineKeyboardButton(text="START GAME", style="success", callback_data="mind:start")],
+        [premium_button("JOIN", "mind:join", "success", "MIND_JOIN_EMOJI_ID"), premium_button("START", "mind:start", "success", "MIND_START_EMOJI_ID")],
     ])
 
 
@@ -39,8 +46,7 @@ def settings_keyboard(game) -> InlineKeyboardMarkup:
 
 def round_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="MY CARDS", style="primary", callback_data="mind:show"), InlineKeyboardButton(text="PLAY LOWEST", style="success", callback_data="mind:play")],
-        [InlineKeyboardButton(text=f"USE STAR · {game.stars}", style="primary", callback_data="mind:star")],
+        [premium_button("MY CARDS", "mind:show", "primary", "MIND_CARDS_EMOJI_ID"), premium_button("PLAY LOWEST", "mind:play", "success", "MIND_PLAY_EMOJI_ID"), premium_button(f"STAR · {game.stars}", "mind:star", "primary", "MIND_STAR_EMOJI_ID")],
     ])
 
 
@@ -58,22 +64,22 @@ def lobby_text(game) -> str:
     names = "\n".join(f"• {player.name}" for player in game.players.values()) or "—"
     return (
         "THE MIND\n"
-        "────────────────\n\n"
-        f"LIVES {game.lives}  ·  STARS {game.stars}  ·  LEVELS {game.max_level}\n\n"
+        "────────\n\n"
+        f"LIVES {game.lives} · STARS {game.stars} · LEVELS {game.max_level}\n"
         f"PLAYERS · {len(game.players)}\n{names}\n\n"
-        "Join the table, then start when everyone is ready."
+        "Join, then start."
     )
 
 
 def settings_text(game) -> str:
     return (
         "SETTINGS\n"
-        "────────────────\n\n"
+        "────────\n\n"
         f"LIVES   {game.lives}\n"
         f"STARS   {game.stars}\n"
         f"LEVELS  {game.max_level}\n"
         f"REWARD  {game.reward or 'none'}\n\n"
-        "Use the controls below to adjust the table."
+        "Adjust the table below."
     )
 
 
@@ -81,12 +87,11 @@ def round_text(game) -> str:
     played = " → ".join(map(str, game.played_numbers)) or "—"
     return (
         "THE MIND\n"
-        "────────────────\n\n"
-        f"LEVEL {game.level} / {game.max_level}\n"
-        f"LIVES {game.lives}  ·  STARS {game.stars}\n\n"
-        f"CENTER\n{played}\n\n"
-        f"CARDS IN PLAY  {game.cards_remaining}\n\n"
-        "No words. No signs.\nPlay when you feel your card is lowest."
+        "────────\n\n"
+        f"LEVEL {game.level}/{game.max_level} · LIVES {game.lives} · STARS {game.stars}\n"
+        f"CENTER  {played}\n"
+        f"CARDS  {game.cards_remaining}\n\n"
+        "Play lowest when ready."
     )
 
 
@@ -113,6 +118,15 @@ async def start_lobby(message: Message) -> None:
     game = manager.create_lobby(message.chat.id)
     game.reward = default_reward
     await message.answer(lobby_text(game), reply_markup=lobby_keyboard())
+
+
+@router.message(Command("mind_settings"), F.chat.type.in_({"group", "supergroup"}))
+async def settings_command(message: Message) -> None:
+    game = manager.get(message.chat.id)
+    if not game or game.status != "lobby":
+        await message.answer("Use /mind first.")
+        return
+    await message.answer(settings_text(game), reply_markup=settings_keyboard(game))
 
 
 @router.message(Command("mind_reward"), F.chat.type.in_({"group", "supergroup"}))
