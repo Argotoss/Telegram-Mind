@@ -23,70 +23,68 @@ default_reward = os.getenv("MIND_REWARD", "")
 
 def lobby_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Join game", callback_data="mind:join")],
-        [InlineKeyboardButton(text="⚙️ Settings", callback_data="mind:settings")],
-        [InlineKeyboardButton(text="🚀 Start", callback_data="mind:start")],
+        [InlineKeyboardButton(text="JOIN", callback_data="mind:join"), InlineKeyboardButton(text="SETTINGS", callback_data="mind:settings")],
+        [InlineKeyboardButton(text="START GAME", callback_data="mind:start")],
     ])
 
 
 def settings_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❤️ −", callback_data="mind:set:lives:-1"), InlineKeyboardButton(text=f"Lives · {game.lives} +", callback_data="mind:set:lives:1")],
-        [InlineKeyboardButton(text="⭐ −", callback_data="mind:set:stars:-1"), InlineKeyboardButton(text=f"Stars · {game.stars} +", callback_data="mind:set:stars:1")],
-        [InlineKeyboardButton(text="🎚 −", callback_data="mind:set:levels:-1"), InlineKeyboardButton(text=f"Levels · {game.max_level} +", callback_data="mind:set:levels:1")],
-        [InlineKeyboardButton(text="↩️ Back", callback_data="mind:settings:back")],
+        [InlineKeyboardButton(text="LIVES −", callback_data="mind:set:lives:-1"), InlineKeyboardButton(text=f"LIVES {game.lives} +", callback_data="mind:set:lives:1")],
+        [InlineKeyboardButton(text="STARS −", callback_data="mind:set:stars:-1"), InlineKeyboardButton(text=f"STARS {game.stars} +", callback_data="mind:set:stars:1")],
+        [InlineKeyboardButton(text="LEVELS −", callback_data="mind:set:levels:-1"), InlineKeyboardButton(text=f"LEVELS {game.max_level} +", callback_data="mind:set:levels:1")],
+        [InlineKeyboardButton(text="BACK", callback_data="mind:settings:back")],
     ])
 
 
 def round_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👁 My cards", callback_data="mind:show")],
-        [InlineKeyboardButton(text="🃏 Play lowest", callback_data="mind:play")],
-        [InlineKeyboardButton(text=f"⭐ Use star · {game.stars}", callback_data="mind:star")],
+        [InlineKeyboardButton(text="MY CARDS", callback_data="mind:show"), InlineKeyboardButton(text="PLAY LOWEST", callback_data="mind:play")],
+        [InlineKeyboardButton(text=f"USE STAR · {game.stars}", callback_data="mind:star")],
     ])
 
 
 def level_complete_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➡️ Next level", callback_data="mind:next")],
-        [InlineKeyboardButton(text="🆕 New lobby", callback_data="mind:new")],
+        [InlineKeyboardButton(text="NEXT LEVEL", callback_data="mind:next"), InlineKeyboardButton(text="NEW LOBBY", callback_data="mind:new")],
     ])
 
 
 def new_game_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🆕 New lobby", callback_data="mind:new")]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="NEW LOBBY", callback_data="mind:new")]])
 
 
 def lobby_text(game) -> str:
     names = "\n".join(f"• {player.name}" for player in game.players.values()) or "—"
     return (
-        "🧠 THE MIND\n"
-        "_A silent co-op timing game_\n\n"
-        f"👥 PLAYERS · {len(game.players)}\n{names}\n\n"
-        f"⚙️ {game.lives} lives  ·  ⭐ {game.stars} stars  ·  🎚 {game.max_level} levels\n\n"
+        "THE MIND\n"
+        "────────────────\n\n"
+        f"LIVES {game.lives}  ·  STARS {game.stars}  ·  LEVELS {game.max_level}\n\n"
+        f"PLAYERS · {len(game.players)}\n{names}\n\n"
         "Join the table, then start when everyone is ready."
     )
 
 
 def settings_text(game) -> str:
     return (
-        "⚙️ SETTINGS\n"
-        "_Tune the table before the first deal._\n\n"
-        f"❤️ Lives · {game.lives}\n"
-        f"⭐ Stars · {game.stars}\n"
-        f"🎚 Levels · {game.max_level}\n"
-        f"🎁 Reward · {game.reward or 'none'}\n\n"
-        "Use − / + to adjust."
+        "SETTINGS\n"
+        "────────────────\n\n"
+        f"LIVES   {game.lives}\n"
+        f"STARS   {game.stars}\n"
+        f"LEVELS  {game.max_level}\n"
+        f"REWARD  {game.reward or 'none'}\n\n"
+        "Use the controls below to adjust the table."
     )
 
 
 def round_text(game) -> str:
     played = " → ".join(map(str, game.played_numbers)) or "—"
     return (
-        "🧠 THE MIND\n"
-        f"LEVEL {game.level} / {game.max_level}\n\n"
-        f"❤️ {game.lives}   ⭐ {game.stars}\n"
-        f"CENTER  {played}\n"
+        "THE MIND\n"
+        "────────────────\n\n"
+        f"LEVEL {game.level} / {game.max_level}\n"
+        f"LIVES {game.lives}  ·  STARS {game.stars}\n\n"
+        f"CENTER\n{played}\n\n"
         f"CARDS IN PLAY  {game.cards_remaining}\n\n"
         "No words. No signs.\nPlay when you feel your card is lowest."
     )
@@ -94,15 +92,15 @@ def round_text(game) -> str:
 
 def finished_text(game, result: PlayResult) -> str:
     if result is PlayResult.GAME_LOST:
-        return round_text(game) + "\n\n💔 GAME OVER\nAll lives are gone."
+        return round_text(game) + "\n\nGAME OVER\nAll lives are gone."
     if result is PlayResult.VICTORY:
         reward = f"\n\n🏆 Reward: {game.reward}" if game.reward else ""
-        return round_text(game) + "\n\n🏆 VICTORY\nAll levels complete." + reward
+        return round_text(game) + "\n\nVICTORY\nAll levels complete." + reward
     if result is PlayResult.LEVEL_COMPLETE:
         reward = f"\n🎁 Reward: {game.reward}" if game.reward else ""
-        return round_text(game) + f"\n\n✨ LEVEL COMPLETE{reward}"
+        return round_text(game) + f"\n\nLEVEL COMPLETE{reward}"
     if result is PlayResult.LIFE_LOST:
-        return round_text(game) + "\n\n🩸 LIFE LOST\nLower cards were discarded."
+        return round_text(game) + "\n\nLIFE LOST\nLower cards were discarded."
     return round_text(game)
 
 
