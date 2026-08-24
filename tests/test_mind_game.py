@@ -3,75 +3,81 @@ import pytest
 from mind_game import Game, GameManager, PlayResult
 
 
-def test_start_deals_unique_numbers_between_one_and_one_hundred():
-    game = Game.start(chat_id=10, players={1: "Ada", 2: "Bob", 3: "Cy"}, rng_seed=7)
-
-    numbers = [player.number for player in game.players.values()]
-
-    assert len(set(numbers)) == 3
-    assert all(1 <= number <= 100 for number in numbers)
-    assert game.players_remaining == 3
+def test_level_deals_level_number_of_unique_cards_per_player():
+    game = Game.start(chat_id=10, players={1: "Ada", 2: "Bob"}, level=2, rng_seed=7)
+    assert all(len(player.cards) == 2 for player in game.players.values())
+    cards = [card for player in game.players.values() for card in player.cards]
+    assert len(cards) == len(set(cards))
+    assert all(1 <= card <= 100 for card in cards)
 
 
-def test_private_reveal_text_contains_only_the_requesting_players_card():
-    game = Game.start(chat_id=10, players={1: "Ada", 2: "Bob"}, rng_seed=2)
-
+def test_private_reveal_contains_only_requesting_players_cards():
+    game = Game.with_cards(chat_id=10, cards={1: [12, 37], 2: [45, 61]})
     text = game.private_number_text(1)
+    assert text == "Your cards: 12, 37"
+    assert "45" not in text and "61" not in text
 
-    assert text == f"Your number: {game.players[1].number}"
-    assert str(game.players[2].number) not in text
 
-
-def test_playing_lowest_remaining_card_advances_round():
-    game = Game.with_numbers(chat_id=10, numbers={1: 12, 2: 37})
-
+def test_playing_lowest_card_continues_and_removes_it_from_hand():
+    game = Game.with_cards(chat_id=10, cards={1: [12, 37], 2: [45, 61]})
     result = game.play_card(1)
-
     assert result is PlayResult.CONTINUE
     assert game.played_numbers == [12]
-    assert game.players[1].played is True
-    assert game.players_remaining == 1
+    assert game.players[1].cards == [37]
 
 
-def test_playing_out_of_order_card_loses_round():
-    game = Game.with_numbers(chat_id=10, numbers={1: 12, 2: 37, 3: 61})
+def test_out_of_order_play_loses_life_and_discards_lower_unplayed_cards():
+    game = Game.with_cards(chat_id=10, cards={1: [12, 37], 2: [45, 61]}, lives=2)
+    result = game.play_card(2)
+    assert result is PlayResult.LIFE_LOST
+    assert game.lives == 1
+    assert game.players[1].cards == []
+    assert game.players[2].cards == [61]
+    assert game.status == "active"
 
-    result = game.play_card(3)
 
-    assert result is PlayResult.LOST
+def test_losing_last_life_ends_game():
+    game = Game.with_cards(chat_id=10, cards={1: [12], 2: [45]}, lives=1)
+    result = game.play_card(2)
+    assert result is PlayResult.GAME_LOST
     assert game.status == "lost"
-    assert game.played_numbers == [61]
 
 
-def test_playing_all_cards_completes_round():
-    game = Game.with_numbers(chat_id=10, numbers={1: 12, 2: 37})
-
+def test_all_cards_complete_level():
+    game = Game.with_cards(chat_id=10, cards={1: [12], 2: [45]}, max_level=2)
     game.play_card(1)
     result = game.play_card(2)
+    assert result is PlayResult.LEVEL_COMPLETE
+    assert game.level == 1
+    assert game.status == "level_complete"
 
-    assert result is PlayResult.COMPLETE
-    assert game.status == "complete"
+
+def test_star_requires_all_players_and_discards_one_lowest_card_each():
+    game = Game.with_cards(chat_id=10, cards={1: [12, 37], 2: [45, 61]}, stars=1)
+    assert game.request_star(1) is False
+    assert game.request_star(2) is True
+    assert game.stars == 0
+    assert game.players[1].cards == [37]
+    assert game.players[2].cards == [61]
 
 
-def test_manager_creates_next_round_for_same_players():
+def test_manager_next_level_keeps_settings_and_increases_hand_size():
     manager = GameManager()
     manager.create_lobby(10)
     manager.join(10, 1, "Ada")
     manager.join(10, 2, "Bob")
-    game = manager.start(10, rng_seed=4)
-    game.status = "complete"
-
-    next_game = manager.next_round(10, rng_seed=5)
-
-    assert set(next_game.players) == {1, 2}
-    assert next_game.status == "active"
-    assert next_game is manager.get(10)
-    assert {p.number for p in game.players.values()} != {p.number for p in next_game.players.values()}
+    game = manager.start(10, max_level=3, rng_seed=4)
+    game.status = "level_complete"
+    next_game = manager.next_level(10, rng_seed=5)
+    assert next_game.level == 2
+    assert all(len(player.cards) == 2 for player in next_game.players.values())
+    assert next_game.max_level == 3
+    assert next_game.lives == game.lives
+    assert next_game.stars == game.stars
 
 
 def test_unknown_player_cannot_reveal_or_play():
-    game = Game.with_numbers(chat_id=10, numbers={1: 12})
-
+    game = Game.with_cards(chat_id=10, cards={1: [12]})
     with pytest.raises(KeyError):
         game.private_number_text(99)
     with pytest.raises(KeyError):

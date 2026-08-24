@@ -1,4 +1,4 @@
-"""Telegram adapter for the group-only The Mind bot."""
+"""Telegram adapter for the group-only, configurable The Mind bot."""
 
 from __future__ import annotations
 
@@ -18,59 +18,112 @@ logging.basicConfig(level=logging.INFO)
 
 router = Router()
 manager = GameManager()
-round_messages: dict[int, int] = {}
-
-
-def is_group(message: Message) -> bool:
-    return message.chat.type in {"group", "supergroup"}
+default_reward = os.getenv("MIND_REWARD", "")
 
 
 def lobby_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Join", callback_data="mind:join")],
+        [InlineKeyboardButton(text="⚙️ Settings", callback_data="mind:settings")],
         [InlineKeyboardButton(text="▶️ Start Game", callback_data="mind:start")],
     ])
 
 
-def round_keyboard() -> InlineKeyboardMarkup:
+def settings_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👁 Show my number", callback_data="mind:show")],
-        [InlineKeyboardButton(text="🃏 Play my card", callback_data="mind:play")],
+        [InlineKeyboardButton(text="❤️ Lives −", callback_data="mind:set:lives:-1"), InlineKeyboardButton(text="Lives +", callback_data="mind:set:lives:1")],
+        [InlineKeyboardButton(text="⭐ Stars −", callback_data="mind:set:stars:-1"), InlineKeyboardButton(text="Stars +", callback_data="mind:set:stars:1")],
+        [InlineKeyboardButton(text="🎚 Levels −", callback_data="mind:set:levels:-1"), InlineKeyboardButton(text="Levels +", callback_data="mind:set:levels:1")],
+        [InlineKeyboardButton(text="↩️ Back", callback_data="mind:settings:back")],
     ])
 
 
-def finished_keyboard() -> InlineKeyboardMarkup:
+def round_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Next round", callback_data="mind:next")],
-        [InlineKeyboardButton(text="New game", callback_data="mind:new")],
+        [InlineKeyboardButton(text="👁 Show my cards", callback_data="mind:show")],
+        [InlineKeyboardButton(text="🃏 Play my lowest card", callback_data="mind:play")],
+        [InlineKeyboardButton(text=f"⭐ Use star ({game.stars})", callback_data="mind:star")],
     ])
+
+
+def level_complete_keyboard(game) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➡️ Next level", callback_data="mind:next")],
+        [InlineKeyboardButton(text="🆕 New game", callback_data="mind:new")],
+    ])
+
+
+def new_game_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🆕 New game", callback_data="mind:new")]])
 
 
 def lobby_text(game) -> str:
     names = "\n".join(f"• {player.name}" for player in game.players.values()) or "—"
-    return f"THE MIND\n\nPlayers ({len(game.players)}):\n{names}\n\nPress Join to enter."
+    return (
+        "THE MIND\n\n"
+        f"Players ({len(game.players)}):\n{names}\n\n"
+        f"Settings: ❤️ {game.lives} lives · ⭐ {game.stars} stars · 🎚 {game.max_level} levels\n\n"
+        "Press Join to enter."
+    )
+
+
+def settings_text(game) -> str:
+    return (
+        "⚙️ GAME SETTINGS\n\n"
+        f"❤️ Lives: {game.lives}\n"
+        f"⭐ Stars: {game.stars}\n"
+        f"🎚 Levels: {game.max_level}\n\n"
+        f"🎁 Reward: {game.reward or 'none'}\n\n"
+        "Settings can be changed before the game starts."
+    )
 
 
 def round_text(game) -> str:
     played = " → ".join(map(str, game.played_numbers)) or "—"
-    return f"THE MIND\n\nCards played: {played}\nPlayers remaining: {game.players_remaining}"
+    return (
+        "THE MIND\n\n"
+        f"Level: {game.level}/{game.max_level}\n"
+        f"❤️ Lives: {game.lives} · ⭐ Stars: {game.stars}\n"
+        f"Cards played: {played}\n"
+        f"Cards remaining: {game.cards_remaining}\n\n"
+        "No talking, showing cards, or signals. Play when you feel your card is lowest."
+    )
 
 
 def finished_text(game, result: PlayResult) -> str:
-    if result is PlayResult.LOST:
-        return round_text(game) + "\n\n❌ Round lost"
-    return round_text(game) + "\n\n✅ Round complete"
+    if result is PlayResult.GAME_LOST:
+        return round_text(game) + "\n\n❌ All lives lost — game over."
+    if result is PlayResult.VICTORY:
+        reward = f"\n\n🏆 Reward: {game.reward}" if game.reward else ""
+        return round_text(game) + "\n\n🏆 Victory! All levels complete." + reward
+    if result is PlayResult.LEVEL_COMPLETE:
+        reward = f"\n🎁 Reward: {game.reward}" if game.reward else ""
+        return round_text(game) + f"\n\n✅ Level complete!{reward}"
+    if result is PlayResult.LIFE_LOST:
+        return round_text(game) + "\n\n💔 Life lost. Lower unplayed cards were discarded."
+    return round_text(game)
+
+
+async def edit_shared(callback: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None) -> None:
+    await callback.message.edit_text(text, reply_markup=markup)
 
 
 @router.message(Command("mind"), F.chat.type.in_({"group", "supergroup"}))
 async def start_lobby(message: Message) -> None:
     game = manager.create_lobby(message.chat.id)
-    sent = await message.answer(lobby_text(game), reply_markup=lobby_keyboard())
-    round_messages[message.chat.id] = sent.message_id
+    game.reward = default_reward
+    await message.answer(lobby_text(game), reply_markup=lobby_keyboard())
 
 
-async def edit_shared(callback: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None) -> None:
-    await callback.message.edit_text(text, reply_markup=markup)
+@router.message(Command("mind_reward"), F.chat.type.in_({"group", "supergroup"}))
+async def set_reward(message: Message) -> None:
+    game = manager.get(message.chat.id)
+    reward = message.text.partition(" ")[2].strip()
+    if not game or game.status != "lobby":
+        await message.answer("Start a lobby with /mind before setting a reward.")
+        return
+    game.reward = reward
+    await message.answer(lobby_text(game), reply_markup=lobby_keyboard())
 
 
 @router.callback_query(F.data == "mind:join")
@@ -79,11 +132,45 @@ async def join(callback: CallbackQuery) -> None:
     if not game:
         await callback.answer("Start a new game with /mind first.", show_alert=True)
         return
-    name = callback.from_user.full_name
-    if not manager.join(game.chat_id, callback.from_user.id, name):
+    if not manager.join(game.chat_id, callback.from_user.id, callback.from_user.full_name):
         await callback.answer("You are already in this lobby, or it has started.", show_alert=True)
         return
     await callback.answer("Joined!")
+    await edit_shared(callback, lobby_text(game), lobby_keyboard())
+
+
+@router.callback_query(F.data == "mind:settings")
+async def settings(callback: CallbackQuery) -> None:
+    game = manager.get(callback.message.chat.id)
+    if not game or game.status != "lobby":
+        await callback.answer("Settings are only available before starting.", show_alert=True)
+        return
+    await callback.answer()
+    await edit_shared(callback, settings_text(game), settings_keyboard())
+
+
+@router.callback_query(F.data.startswith("mind:set:"))
+async def change_setting(callback: CallbackQuery) -> None:
+    game = manager.get(callback.message.chat.id)
+    if not game or game.status != "lobby":
+        await callback.answer("Settings are only available before starting.", show_alert=True)
+        return
+    _, _, setting, direction = callback.data.split(":")
+    current = {"lives": game.lives, "stars": game.stars, "levels": game.max_level}[setting]
+    minimum, maximum = (1, 5) if setting == "lives" else ((0, 3) if setting == "stars" else (1, 10))
+    value = max(minimum, min(maximum, current + int(direction)))
+    manager.configure(game.chat_id, **({"max_level": value} if setting == "levels" else {setting: value}))
+    await callback.answer(f"{setting.title()}: {value}")
+    await edit_shared(callback, settings_text(game), settings_keyboard())
+
+
+@router.callback_query(F.data == "mind:settings:back")
+async def settings_back(callback: CallbackQuery) -> None:
+    game = manager.get(callback.message.chat.id)
+    if not game:
+        await callback.answer("No game found.", show_alert=True)
+        return
+    await callback.answer()
     await edit_shared(callback, lobby_text(game), lobby_keyboard())
 
 
@@ -97,12 +184,12 @@ async def start_game(callback: CallbackQuery) -> None:
         await callback.answer("Join the game first.", show_alert=True)
         return
     try:
-        game = manager.start(game.chat_id)
+        game = manager.start(game.chat_id, reward=game.reward)
     except ValueError as error:
         await callback.answer(str(error), show_alert=True)
         return
     await callback.answer("Game started!")
-    await edit_shared(callback, round_text(game), round_keyboard())
+    await edit_shared(callback, round_text(game), round_keyboard(game))
 
 
 @router.callback_query(F.data == "mind:show")
@@ -122,26 +209,45 @@ async def play_card(callback: CallbackQuery) -> None:
         return
     try:
         result = game.play_card(callback.from_user.id)
-    except ValueError as error:
+    except (KeyError, ValueError) as error:
         await callback.answer(str(error), show_alert=True)
         return
-    await callback.answer("Card played.")
-    await edit_shared(callback, finished_text(game, result) if result is not PlayResult.CONTINUE else round_text(game), finished_keyboard() if result is not PlayResult.CONTINUE else round_keyboard())
+    await callback.answer("Lowest card played.")
+    markup = round_keyboard(game) if result in {PlayResult.CONTINUE, PlayResult.LIFE_LOST} else (level_complete_keyboard(game) if result is PlayResult.LEVEL_COMPLETE else new_game_keyboard())
+    await edit_shared(callback, finished_text(game, result), markup)
+
+
+@router.callback_query(F.data == "mind:star")
+async def use_star(callback: CallbackQuery) -> None:
+    game = manager.get(callback.message.chat.id)
+    if not game or callback.from_user.id not in game.players:
+        await callback.answer("You are not a player in this game.", show_alert=True)
+        return
+    try:
+        activated = game.request_star(callback.from_user.id)
+    except (KeyError, ValueError) as error:
+        await callback.answer(str(error), show_alert=True)
+        return
+    if not activated:
+        await callback.answer(f"Hand raised ({len(game.star_votes)}/{len(game.players)}).")
+        return
+    await callback.answer("⭐ Star used — one lowest card discarded from each player.")
+    await edit_shared(callback, round_text(game), round_keyboard(game))
 
 
 @router.callback_query(F.data == "mind:next")
-async def next_round(callback: CallbackQuery) -> None:
+async def next_level(callback: CallbackQuery) -> None:
     game = manager.get(callback.message.chat.id)
     if not game:
         await callback.answer("No game found.", show_alert=True)
         return
     try:
-        game = manager.next_round(game.chat_id)
+        game = manager.next_level(game.chat_id)
     except ValueError as error:
         await callback.answer(str(error), show_alert=True)
         return
-    await callback.answer("Next round!")
-    await edit_shared(callback, round_text(game), round_keyboard())
+    await callback.answer("Next level!")
+    await edit_shared(callback, round_text(game), round_keyboard(game))
 
 
 @router.callback_query(F.data == "mind:new")
