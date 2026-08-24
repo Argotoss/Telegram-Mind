@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+from html import escape
 import logging
 import os
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from dotenv import load_dotenv
 
 from mind_game import GameManager, PlayResult
-from render_board import render_board
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +20,6 @@ logging.basicConfig(level=logging.INFO)
 router = Router()
 manager = GameManager()
 default_reward = os.getenv("MIND_REWARD", "")
-board_messages: dict[int, int] = {}
 
 
 def premium_button(text: str, callback_data: str, style: str, emoji_env: str | None = None) -> InlineKeyboardButton:
@@ -60,6 +59,44 @@ def level_complete_keyboard(game) -> InlineKeyboardMarkup:
 
 def new_game_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="NEW LOBBY", style="danger", callback_data="mind:new")]])
+
+
+def board_text(game) -> str:
+    players = " · ".join(escape(player.name) for player in game.players.values()) or "—"
+    return (
+        "<b>THE MIND</b>\n"
+        f"<code>LEVEL {game.level}/{game.max_level} · LIVES {game.lives} · STARS {game.stars}</code>\n\n"
+        f"<b>PLAYERS · {len(game.players)}</b>\n{players}\n"
+        f"<code>CARDS {game.cards_remaining}</code>"
+    )
+
+
+def board_keyboard(game) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if game.status == "active":
+        cards = [
+            premium_button(str(card), "mind:noop", "success", "MIND_CARD_EMOJI_ID")
+            for card in game.played_numbers
+        ]
+        cards.extend(
+            premium_button("🂠", "mind:noop", "primary", "MIND_BACK_EMOJI_ID")
+            for _ in range(game.cards_remaining)
+        )
+        rows.append(cards[:8])
+    if game.players:
+        rows.append([
+            InlineKeyboardButton(text=player.name[:16], style="primary", callback_data="mind:noop")
+            for player in list(game.players.values())[:4]
+        ])
+    if game.status == "lobby":
+        rows.extend(lobby_keyboard().inline_keyboard)
+    elif game.status == "active":
+        rows.extend(round_keyboard(game).inline_keyboard)
+    elif game.status == "level_complete":
+        rows.extend(level_complete_keyboard(game).inline_keyboard)
+    else:
+        rows.extend(new_game_keyboard().inline_keyboard)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def lobby_text(game) -> str:
@@ -111,42 +148,15 @@ def finished_text(game, result: PlayResult) -> str:
     return round_text(game)
 
 
-def board_markup(game):
-    if game.status == "lobby":
-        return lobby_keyboard()
-    if game.status == "active":
-        return round_keyboard(game)
-    if game.status == "level_complete":
-        return level_complete_keyboard(game)
-    return new_game_keyboard()
-
-
-async def send_board(bot: Bot, chat_id: int, game) -> Message:
-    old_message_id = board_messages.get(chat_id)
-    if old_message_id:
-        try:
-            await bot.delete_message(chat_id, old_message_id)
-        except Exception:
-            pass
-    sent = await bot.send_photo(
-        chat_id,
-        BufferedInputFile(render_board(game), filename="the-mind-table.png"),
-        reply_markup=board_markup(game),
-    )
-    board_messages[chat_id] = sent.message_id
-    return sent
-
-
 async def refresh_board(callback: CallbackQuery, game) -> None:
-    media = InputMediaPhoto(media=BufferedInputFile(render_board(game), filename="the-mind-table.png"))
-    await callback.message.edit_media(media=media, reply_markup=board_markup(game))
+    await callback.message.edit_text(board_text(game), parse_mode="HTML", reply_markup=board_keyboard(game))
 
 
 @router.message(Command("mind"), F.chat.type.in_({"group", "supergroup"}))
 async def start_lobby(message: Message) -> None:
     game = manager.create_lobby(message.chat.id)
     game.reward = default_reward
-    await send_board(message.bot, message.chat.id, game)
+    await message.answer(board_text(game), parse_mode="HTML", reply_markup=board_keyboard(game))
 
 
 @router.message(Command("mind_settings"), F.chat.type.in_({"group", "supergroup"}))
@@ -166,7 +176,7 @@ async def set_reward(message: Message) -> None:
         await message.answer("Start a lobby with /mind before setting a reward.")
         return
     game.reward = reward
-    await send_board(message.bot, message.chat.id, game)
+    await message.answer(board_text(game), parse_mode="HTML", reply_markup=board_keyboard(game))
 
 
 @router.callback_query(F.data == "mind:join")
@@ -180,6 +190,11 @@ async def join(callback: CallbackQuery) -> None:
         return
     await callback.answer("Joined!")
     await refresh_board(callback, game)
+
+
+@router.callback_query(F.data == "mind:noop")
+async def noop(callback: CallbackQuery) -> None:
+    await callback.answer()
 
 
 @router.callback_query(F.data == "mind:settings")

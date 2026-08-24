@@ -1,4 +1,4 @@
-from bot import lobby_keyboard, lobby_text, round_keyboard
+from bot import board_keyboard, board_text, lobby_keyboard, lobby_text, round_keyboard
 from mind_game import Game
 
 
@@ -23,3 +23,14 @@ def test_round_uses_compact_action_labels():
     assert labels == ["MY CARDS", "PLAY LOWEST", "STAR · 1"]
     assert len(round_keyboard(game).inline_keyboard) == 1
     assert [button.style for button in round_keyboard(game).inline_keyboard[0]] == ["primary", "success", "primary"]
+
+
+def test_board_lays_played_cards_face_up_and_hidden_cards_as_back_buttons():
+    game = Game.with_cards(chat_id=10, cards={1: [12, 37], 2: [45]})
+    game.play_card(1)
+
+    card_row = board_keyboard(game).inline_keyboard[0]
+
+    assert [button.text for button in card_row] == ["12", "🂠", "🂠"]
+    assert [button.style for button in card_row] == ["success", "primary", "primary"]
+    assert "CARDS 2" in board_text(game)
