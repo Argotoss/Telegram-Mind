@@ -147,7 +147,16 @@ class GameManager:
         self.games: dict[int, Game] = {}
 
     def create_lobby(self, chat_id: int) -> Game:
-        game = Game(chat_id, {})
+        previous = self.games.get(chat_id)
+        players = {user_id: Player(name=player.name) for user_id, player in previous.players.items()} if previous else {}
+        game = Game(
+            chat_id,
+            players,
+            lives=previous.lives if previous else 3,
+            stars=previous.stars if previous else 1,
+            max_level=previous.max_level if previous else 10,
+            reward=previous.reward if previous else "",
+        )
         self.games[chat_id] = game
         return game
 
