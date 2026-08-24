@@ -24,7 +24,7 @@ A tiny group-only Telegram bot for playing The Mind. Shared game state stays in 
 
 In the group, send `/mind`. Everyone presses **Join**. Use **⚙️ Settings** before starting to configure lives, stars, and the number of levels. Then press **Start Game**.
 
-Sending `/mind` again resets the current game to a fresh lobby while keeping the existing player roster, so the same players can start over immediately.
+Sending `/mind` again resets the current game to a fresh empty lobby. Everyone must press **Join game** again.
 
 You can set a group-specific reward before starting with `/mind_reward Golden crown`.
 

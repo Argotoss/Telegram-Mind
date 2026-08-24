@@ -23,84 +23,86 @@ default_reward = os.getenv("MIND_REWARD", "")
 
 def lobby_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Join", callback_data="mind:join")],
+        [InlineKeyboardButton(text="✅ Join game", callback_data="mind:join")],
         [InlineKeyboardButton(text="⚙️ Settings", callback_data="mind:settings")],
-        [InlineKeyboardButton(text="▶️ Start Game", callback_data="mind:start")],
+        [InlineKeyboardButton(text="🚀 Start", callback_data="mind:start")],
     ])
 
 
-def settings_keyboard() -> InlineKeyboardMarkup:
+def settings_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❤️ Lives −", callback_data="mind:set:lives:-1"), InlineKeyboardButton(text="Lives +", callback_data="mind:set:lives:1")],
-        [InlineKeyboardButton(text="⭐ Stars −", callback_data="mind:set:stars:-1"), InlineKeyboardButton(text="Stars +", callback_data="mind:set:stars:1")],
-        [InlineKeyboardButton(text="🎚 Levels −", callback_data="mind:set:levels:-1"), InlineKeyboardButton(text="Levels +", callback_data="mind:set:levels:1")],
+        [InlineKeyboardButton(text="❤️ −", callback_data="mind:set:lives:-1"), InlineKeyboardButton(text=f"Lives · {game.lives} +", callback_data="mind:set:lives:1")],
+        [InlineKeyboardButton(text="⭐ −", callback_data="mind:set:stars:-1"), InlineKeyboardButton(text=f"Stars · {game.stars} +", callback_data="mind:set:stars:1")],
+        [InlineKeyboardButton(text="🎚 −", callback_data="mind:set:levels:-1"), InlineKeyboardButton(text=f"Levels · {game.max_level} +", callback_data="mind:set:levels:1")],
         [InlineKeyboardButton(text="↩️ Back", callback_data="mind:settings:back")],
     ])
 
 
 def round_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👁 Show my cards", callback_data="mind:show")],
-        [InlineKeyboardButton(text="🃏 Play my lowest card", callback_data="mind:play")],
-        [InlineKeyboardButton(text=f"⭐ Use star ({game.stars})", callback_data="mind:star")],
+        [InlineKeyboardButton(text="👁 My cards", callback_data="mind:show")],
+        [InlineKeyboardButton(text="🃏 Play lowest", callback_data="mind:play")],
+        [InlineKeyboardButton(text=f"⭐ Use star · {game.stars}", callback_data="mind:star")],
     ])
 
 
 def level_complete_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➡️ Next level", callback_data="mind:next")],
-        [InlineKeyboardButton(text="🆕 New game", callback_data="mind:new")],
+        [InlineKeyboardButton(text="🆕 New lobby", callback_data="mind:new")],
     ])
 
 
 def new_game_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🆕 New game", callback_data="mind:new")]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🆕 New lobby", callback_data="mind:new")]])
 
 
 def lobby_text(game) -> str:
     names = "\n".join(f"• {player.name}" for player in game.players.values()) or "—"
     return (
-        "THE MIND\n\n"
-        f"Players ({len(game.players)}):\n{names}\n\n"
-        f"Settings: ❤️ {game.lives} lives · ⭐ {game.stars} stars · 🎚 {game.max_level} levels\n\n"
-        "Press Join to enter."
+        "🧠 THE MIND\n"
+        "_A silent co-op timing game_\n\n"
+        f"👥 PLAYERS · {len(game.players)}\n{names}\n\n"
+        f"⚙️ {game.lives} lives  ·  ⭐ {game.stars} stars  ·  🎚 {game.max_level} levels\n\n"
+        "Join the table, then start when everyone is ready."
     )
 
 
 def settings_text(game) -> str:
     return (
-        "⚙️ GAME SETTINGS\n\n"
-        f"❤️ Lives: {game.lives}\n"
-        f"⭐ Stars: {game.stars}\n"
-        f"🎚 Levels: {game.max_level}\n\n"
-        f"🎁 Reward: {game.reward or 'none'}\n\n"
-        "Settings can be changed before the game starts."
+        "⚙️ SETTINGS\n"
+        "_Tune the table before the first deal._\n\n"
+        f"❤️ Lives · {game.lives}\n"
+        f"⭐ Stars · {game.stars}\n"
+        f"🎚 Levels · {game.max_level}\n"
+        f"🎁 Reward · {game.reward or 'none'}\n\n"
+        "Use − / + to adjust."
     )
 
 
 def round_text(game) -> str:
     played = " → ".join(map(str, game.played_numbers)) or "—"
     return (
-        "THE MIND\n\n"
-        f"Level: {game.level}/{game.max_level}\n"
-        f"❤️ Lives: {game.lives} · ⭐ Stars: {game.stars}\n"
-        f"Cards played: {played}\n"
-        f"Cards remaining: {game.cards_remaining}\n\n"
-        "No talking, showing cards, or signals. Play when you feel your card is lowest."
+        "🧠 THE MIND\n"
+        f"LEVEL {game.level} / {game.max_level}\n\n"
+        f"❤️ {game.lives}   ⭐ {game.stars}\n"
+        f"CENTER  {played}\n"
+        f"CARDS IN PLAY  {game.cards_remaining}\n\n"
+        "No words. No signs.\nPlay when you feel your card is lowest."
     )
 
 
 def finished_text(game, result: PlayResult) -> str:
     if result is PlayResult.GAME_LOST:
-        return round_text(game) + "\n\n❌ All lives lost — game over."
+        return round_text(game) + "\n\n💔 GAME OVER\nAll lives are gone."
     if result is PlayResult.VICTORY:
         reward = f"\n\n🏆 Reward: {game.reward}" if game.reward else ""
-        return round_text(game) + "\n\n🏆 Victory! All levels complete." + reward
+        return round_text(game) + "\n\n🏆 VICTORY\nAll levels complete." + reward
     if result is PlayResult.LEVEL_COMPLETE:
         reward = f"\n🎁 Reward: {game.reward}" if game.reward else ""
-        return round_text(game) + f"\n\n✅ Level complete!{reward}"
+        return round_text(game) + f"\n\n✨ LEVEL COMPLETE{reward}"
     if result is PlayResult.LIFE_LOST:
-        return round_text(game) + "\n\n💔 Life lost. Lower unplayed cards were discarded."
+        return round_text(game) + "\n\n🩸 LIFE LOST\nLower cards were discarded."
     return round_text(game)
 
 
@@ -146,7 +148,7 @@ async def settings(callback: CallbackQuery) -> None:
         await callback.answer("Settings are only available before starting.", show_alert=True)
         return
     await callback.answer()
-    await edit_shared(callback, settings_text(game), settings_keyboard())
+    await edit_shared(callback, settings_text(game), settings_keyboard(game))
 
 
 @router.callback_query(F.data.startswith("mind:set:"))
@@ -161,7 +163,7 @@ async def change_setting(callback: CallbackQuery) -> None:
     value = max(minimum, min(maximum, current + int(direction)))
     manager.configure(game.chat_id, **({"max_level": value} if setting == "levels" else {setting: value}))
     await callback.answer(f"{setting.title()}: {value}")
-    await edit_shared(callback, settings_text(game), settings_keyboard())
+    await edit_shared(callback, settings_text(game), settings_keyboard(game))
 
 
 @router.callback_query(F.data == "mind:settings:back")

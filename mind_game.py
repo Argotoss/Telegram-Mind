@@ -148,10 +148,9 @@ class GameManager:
 
     def create_lobby(self, chat_id: int) -> Game:
         previous = self.games.get(chat_id)
-        players = {user_id: Player(name=player.name) for user_id, player in previous.players.items()} if previous else {}
         game = Game(
             chat_id,
-            players,
+            {},
             lives=previous.lives if previous else 3,
             stars=previous.stars if previous else 1,
             max_level=previous.max_level if previous else 10,

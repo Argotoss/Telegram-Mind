@@ -84,7 +84,7 @@ def test_unknown_player_cannot_reveal_or_play():
         game.play_card(99)
 
 
-def test_new_lobby_from_existing_game_keeps_existing_players():
+def test_new_lobby_from_existing_game_clears_existing_players():
     manager = GameManager()
     manager.create_lobby(10)
     manager.join(10, 1, "Ada")
@@ -94,5 +94,4 @@ def test_new_lobby_from_existing_game_keeps_existing_players():
     new_lobby = manager.create_lobby(10)
 
     assert new_lobby.status == "lobby"
-    assert set(new_lobby.players) == {1, 2}
-    assert all(not player.cards for player in new_lobby.players.values())
+    assert new_lobby.players == {}
