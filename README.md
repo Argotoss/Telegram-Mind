@@ -1,6 +1,6 @@
 # Telegram The Mind
 
-A tiny group-only Telegram bot for playing The Mind. Shared game state stays in the group; each player's card is revealed privately through Telegram's callback alert.
+A tiny group-only Telegram bot for playing The Mind. The shared game state is rendered as a changeable table image in the group; each player's card is revealed privately through Telegram's callback alert.
 
 ## Setup
 
@@ -32,7 +32,7 @@ At level 1 each player receives one card, level 2 gives two cards, and so on. **
 
 To use a star, every player presses **⭐ Use star**. Once everyone has raised a hand, one lowest card from each player's hand is discarded simultaneously.
 
-The bot never puts an unplayed player's number into the shared group message. It uses `answerCallbackQuery(show_alert=True)` for the private reveal.
+The bot never puts an unplayed player's number into the shared table image. It uses `answerCallbackQuery(show_alert=True)` for the private reveal. Face-up cards are only cards already played in the center; hidden cards are drawn as card backs.
 
 ## Checks
 

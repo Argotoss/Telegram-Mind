@@ -8,10 +8,11 @@ import os
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Message
 from dotenv import load_dotenv
 
 from mind_game import GameManager, PlayResult
+from render_board import render_board
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +20,7 @@ logging.basicConfig(level=logging.INFO)
 router = Router()
 manager = GameManager()
 default_reward = os.getenv("MIND_REWARD", "")
+board_messages: dict[int, int] = {}
 
 
 def premium_button(text: str, callback_data: str, style: str, emoji_env: str | None = None) -> InlineKeyboardButton:
@@ -109,15 +111,42 @@ def finished_text(game, result: PlayResult) -> str:
     return round_text(game)
 
 
-async def edit_shared(callback: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None) -> None:
-    await callback.message.edit_text(text, reply_markup=markup)
+def board_markup(game):
+    if game.status == "lobby":
+        return lobby_keyboard()
+    if game.status == "active":
+        return round_keyboard(game)
+    if game.status == "level_complete":
+        return level_complete_keyboard(game)
+    return new_game_keyboard()
+
+
+async def send_board(bot: Bot, chat_id: int, game) -> Message:
+    old_message_id = board_messages.get(chat_id)
+    if old_message_id:
+        try:
+            await bot.delete_message(chat_id, old_message_id)
+        except Exception:
+            pass
+    sent = await bot.send_photo(
+        chat_id,
+        BufferedInputFile(render_board(game), filename="the-mind-table.png"),
+        reply_markup=board_markup(game),
+    )
+    board_messages[chat_id] = sent.message_id
+    return sent
+
+
+async def refresh_board(callback: CallbackQuery, game) -> None:
+    media = InputMediaPhoto(media=BufferedInputFile(render_board(game), filename="the-mind-table.png"))
+    await callback.message.edit_media(media=media, reply_markup=board_markup(game))
 
 
 @router.message(Command("mind"), F.chat.type.in_({"group", "supergroup"}))
 async def start_lobby(message: Message) -> None:
     game = manager.create_lobby(message.chat.id)
     game.reward = default_reward
-    await message.answer(lobby_text(game), reply_markup=lobby_keyboard())
+    await send_board(message.bot, message.chat.id, game)
 
 
 @router.message(Command("mind_settings"), F.chat.type.in_({"group", "supergroup"}))
@@ -137,7 +166,7 @@ async def set_reward(message: Message) -> None:
         await message.answer("Start a lobby with /mind before setting a reward.")
         return
     game.reward = reward
-    await message.answer(lobby_text(game), reply_markup=lobby_keyboard())
+    await send_board(message.bot, message.chat.id, game)
 
 
 @router.callback_query(F.data == "mind:join")
@@ -150,7 +179,7 @@ async def join(callback: CallbackQuery) -> None:
         await callback.answer("You are already in this lobby, or it has started.", show_alert=True)
         return
     await callback.answer("Joined!")
-    await edit_shared(callback, lobby_text(game), lobby_keyboard())
+    await refresh_board(callback, game)
 
 
 @router.callback_query(F.data == "mind:settings")
@@ -160,7 +189,7 @@ async def settings(callback: CallbackQuery) -> None:
         await callback.answer("Settings are only available before starting.", show_alert=True)
         return
     await callback.answer()
-    await edit_shared(callback, settings_text(game), settings_keyboard(game))
+    await callback.message.answer(settings_text(game), reply_markup=settings_keyboard(game))
 
 
 @router.callback_query(F.data.startswith("mind:set:"))
@@ -175,7 +204,7 @@ async def change_setting(callback: CallbackQuery) -> None:
     value = max(minimum, min(maximum, current + int(direction)))
     manager.configure(game.chat_id, **({"max_level": value} if setting == "levels" else {setting: value}))
     await callback.answer(f"{setting.title()}: {value}")
-    await edit_shared(callback, settings_text(game), settings_keyboard(game))
+    await callback.message.edit_text(settings_text(game), reply_markup=settings_keyboard(game))
 
 
 @router.callback_query(F.data == "mind:settings:back")
@@ -185,7 +214,7 @@ async def settings_back(callback: CallbackQuery) -> None:
         await callback.answer("No game found.", show_alert=True)
         return
     await callback.answer()
-    await edit_shared(callback, lobby_text(game), lobby_keyboard())
+    await refresh_board(callback, game)
 
 
 @router.callback_query(F.data == "mind:start")
@@ -203,7 +232,7 @@ async def start_game(callback: CallbackQuery) -> None:
         await callback.answer(str(error), show_alert=True)
         return
     await callback.answer("Game started!")
-    await edit_shared(callback, round_text(game), round_keyboard(game))
+    await refresh_board(callback, game)
 
 
 @router.callback_query(F.data == "mind:show")
@@ -227,8 +256,7 @@ async def play_card(callback: CallbackQuery) -> None:
         await callback.answer(str(error), show_alert=True)
         return
     await callback.answer("Lowest card played.")
-    markup = round_keyboard(game) if result in {PlayResult.CONTINUE, PlayResult.LIFE_LOST} else (level_complete_keyboard(game) if result is PlayResult.LEVEL_COMPLETE else new_game_keyboard())
-    await edit_shared(callback, finished_text(game, result), markup)
+    await refresh_board(callback, game)
 
 
 @router.callback_query(F.data == "mind:star")
@@ -246,7 +274,7 @@ async def use_star(callback: CallbackQuery) -> None:
         await callback.answer(f"Hand raised ({len(game.star_votes)}/{len(game.players)}).")
         return
     await callback.answer("⭐ Star used — one lowest card discarded from each player.")
-    await edit_shared(callback, round_text(game), round_keyboard(game))
+    await refresh_board(callback, game)
 
 
 @router.callback_query(F.data == "mind:next")
@@ -261,14 +289,15 @@ async def next_level(callback: CallbackQuery) -> None:
         await callback.answer(str(error), show_alert=True)
         return
     await callback.answer("Next level!")
-    await edit_shared(callback, round_text(game), round_keyboard(game))
+    await refresh_board(callback, game)
 
 
 @router.callback_query(F.data == "mind:new")
 async def new_game(callback: CallbackQuery) -> None:
     game = manager.new_game(callback.message.chat.id)
+    game.reward = default_reward
     await callback.answer("New lobby created.")
-    await edit_shared(callback, lobby_text(game), lobby_keyboard())
+    await refresh_board(callback, game)
 
 
 async def main() -> None:
