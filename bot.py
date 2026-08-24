@@ -23,35 +23,35 @@ default_reward = os.getenv("MIND_REWARD", "")
 
 def lobby_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="JOIN", callback_data="mind:join"), InlineKeyboardButton(text="SETTINGS", callback_data="mind:settings")],
-        [InlineKeyboardButton(text="START GAME", callback_data="mind:start")],
+        [InlineKeyboardButton(text="JOIN", style="success", callback_data="mind:join"), InlineKeyboardButton(text="SETTINGS", style="primary", callback_data="mind:settings")],
+        [InlineKeyboardButton(text="START GAME", style="success", callback_data="mind:start")],
     ])
 
 
 def settings_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="LIVES −", callback_data="mind:set:lives:-1"), InlineKeyboardButton(text=f"LIVES {game.lives} +", callback_data="mind:set:lives:1")],
-        [InlineKeyboardButton(text="STARS −", callback_data="mind:set:stars:-1"), InlineKeyboardButton(text=f"STARS {game.stars} +", callback_data="mind:set:stars:1")],
-        [InlineKeyboardButton(text="LEVELS −", callback_data="mind:set:levels:-1"), InlineKeyboardButton(text=f"LEVELS {game.max_level} +", callback_data="mind:set:levels:1")],
-        [InlineKeyboardButton(text="BACK", callback_data="mind:settings:back")],
+        [InlineKeyboardButton(text="LIVES −", style="danger", callback_data="mind:set:lives:-1"), InlineKeyboardButton(text=f"LIVES {game.lives} +", style="primary", callback_data="mind:set:lives:1")],
+        [InlineKeyboardButton(text="STARS −", style="danger", callback_data="mind:set:stars:-1"), InlineKeyboardButton(text=f"STARS {game.stars} +", style="primary", callback_data="mind:set:stars:1")],
+        [InlineKeyboardButton(text="LEVELS −", style="danger", callback_data="mind:set:levels:-1"), InlineKeyboardButton(text=f"LEVELS {game.max_level} +", style="primary", callback_data="mind:set:levels:1")],
+        [InlineKeyboardButton(text="BACK", style="primary", callback_data="mind:settings:back")],
     ])
 
 
 def round_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="MY CARDS", callback_data="mind:show"), InlineKeyboardButton(text="PLAY LOWEST", callback_data="mind:play")],
-        [InlineKeyboardButton(text=f"USE STAR · {game.stars}", callback_data="mind:star")],
+        [InlineKeyboardButton(text="MY CARDS", style="primary", callback_data="mind:show"), InlineKeyboardButton(text="PLAY LOWEST", style="success", callback_data="mind:play")],
+        [InlineKeyboardButton(text=f"USE STAR · {game.stars}", style="primary", callback_data="mind:star")],
     ])
 
 
 def level_complete_keyboard(game) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="NEXT LEVEL", callback_data="mind:next"), InlineKeyboardButton(text="NEW LOBBY", callback_data="mind:new")],
+        [InlineKeyboardButton(text="NEXT LEVEL", style="success", callback_data="mind:next"), InlineKeyboardButton(text="NEW LOBBY", style="danger", callback_data="mind:new")],
     ])
 
 
 def new_game_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="NEW LOBBY", callback_data="mind:new")]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="NEW LOBBY", style="danger", callback_data="mind:new")]])
 
 
 def lobby_text(game) -> str:
