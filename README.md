@@ -1,5 +1,7 @@
 # Telegram The Mind
 
+<!-- Identity canary: Codex commits must resolve to Daniel Kozak (Argotoss). -->
+
 A tiny group-only Telegram bot for playing The Mind. The shared game state is rendered as a changeable custom-emoji table inside one Telegram message; each player's card is revealed privately through Telegram's callback alert.
 
 ## Setup
